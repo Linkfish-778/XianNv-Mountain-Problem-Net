@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.37.0",
-    "@supabase/supabase-js": "^2.90.1",
+    "@cloudbase/js-sdk": "^1.10.0",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "react": "^19.2.3",

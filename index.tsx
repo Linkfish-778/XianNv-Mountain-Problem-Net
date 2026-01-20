@@ -3,7 +3,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { IssueItem, IssueCategory } from './types';
 import { api, transformIssue } from './services/api';
-import { supabase } from './services/supabaseClient';
+import { db } from './services/supabaseClient';
 import { DesktopRow, MobileCard } from './components/IssueItem';
 
 const App: React.FC = () => {
@@ -22,21 +22,21 @@ const App: React.FC = () => {
       setLoading(false);
     });
 
-    const subscription = supabase
-      .channel('issues-channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setIssues(prev => prev.some(issue => issue.id === payload.new.id.toString()) ? prev : [...prev, transformIssue(payload.new)]);
-        } else if (payload.eventType === 'UPDATE') {
-          setIssues(prev => prev.map(issue => issue.id === payload.new.id.toString() ? transformIssue(payload.new) : issue));
-        } else if (payload.eventType === 'DELETE') {
-          setIssues(prev => prev.filter(issue => issue.id !== payload.old.id.toString()));
-        }
-      })
-      .subscribe();
+    const watcher = db.collection('issues').watch({
+      onChange: (snapshot) => {
+        // 初次加载或数据变更时，重新设置整个列表
+        const updatedIssues = snapshot.docs.map(transformIssue);
+        setIssues(updatedIssues);
+        if (loading) setLoading(false);
+      },
+      onError: (err) => {
+        console.error('Real-time subscription failed:', err);
+        setLoading(false);
+      }
+    });
 
     return () => {
-      supabase.removeChannel(subscription);
+      watcher.close();
     };
   }, []);
 

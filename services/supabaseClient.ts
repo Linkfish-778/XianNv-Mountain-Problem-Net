@@ -1,10 +1,13 @@
-import { createClient } from '@supabase/supabase-js';
+import cloudbase from "@cloudbase/js-sdk";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// 初始化 CloudBase
+// 使用您提供的环境 ID
+const app = cloudbase.init({
+  env: "xiannv-7gjman30596fb7b0",
+});
 
-if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase URL and Anon Key must be provided in .env.local');
-}
+// 获取数据库引用
+const db = app.database();
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// 导出数据库实例，供 api.ts 文件使用
+export { db };

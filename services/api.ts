@@ -1,36 +1,40 @@
-import { supabase } from './supabaseClient';
+import { db } from './supabaseClient';
 import { IssueItem } from '../types';
 
-// Supabase 返回的数据通常需要一些转换以匹配我们的前端类型
-type IssueFromSupabase = Omit<IssueItem, 'id'> & { id: number; created_at: string };
-
-const transformIssue = (issue: IssueFromSupabase): IssueItem => ({
-    ...issue,
-    id: issue.id.toString(), // 将 number 类型的 id 转换为 string
-    lastUpdated: new Date(issue.created_at).toISOString().split('T')[0] // 简化日期格式
+// CloudBase 返回的数据和前端类型可能需要适配
+// 我们假设 CloudBase 直接返回的字段名和结构与 IssueItem 兼容
+// 但 id 通常是 _id，需要转换
+const transformIssue = (issue: any): IssueItem => ({
+  ...issue,
+  id: issue._id, // 将 CloudBase 的 _id 映射到 id
+  lastUpdated: new Date(issue.lastUpdated || Date.now()).toISOString().split('T')[0]
 });
 
+const issuesCollection = db.collection('issues');
+
 export const api = {
-    getIssues: async (): Promise<IssueItem[]> => {
-        const { data, error } = await supabase.from('issues').select('*');
-        if (error) throw error;
-        return data.map(transformIssue);
-    },
+  getIssues: async (): Promise<IssueItem[]> => {
+    // 使用 TCB 的 get() 方法获取数据
+    const res = await issuesCollection.limit(1000).get();
+    // TCB 的数据在 res.data 中
+    return res.data.map(transformIssue);
+  },
 
-    createIssue: async (issue: Omit<IssueItem, 'id' | 'lastUpdated'>): Promise<IssueItem> => {
-        const { data, error } = await supabase.from('issues').insert(issue).select();
-        if (error) throw error;
-        return transformIssue(data[0]);
-    },
+  createIssue: async (issue: Omit<IssueItem, 'id' | 'lastUpdated'>): Promise<any> => {
+    // 使用 TCB 的 add() 方法
+    return await issuesCollection.add(issue);
+  },
 
-    updateIssue: async (id: string, updates: Partial<IssueItem>): Promise<IssueItem> => {
-        const { data, error } = await supabase.from('issues').update(updates).eq('id', id).select();
-        if (error) throw error;
-        return transformIssue(data[0]);
-    },
+  updateIssue: async (id: string, updates: Partial<IssueItem>): Promise<any> => {
+    // 使用 TCB 的 doc().update() 方法
+    // 注意：TCB 使用文档的 _id 来定位
+    return await issuesCollection.doc(id).update(updates);
+  },
 
-    deleteIssue: async (id: string): Promise<void> => {
-        const { error } = await supabase.from('issues').delete().eq('id', id);
-        if (error) throw error;
-    }
+  deleteIssue: async (id: string): Promise<any> => {
+    // 使用 TCB 的 doc().remove() 方法
+    return await issuesCollection.doc(id).remove();
+  }
 };
+
+export { transformIssue };
