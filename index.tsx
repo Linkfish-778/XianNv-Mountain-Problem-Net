@@ -2,7 +2,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { IssueItem, IssueCategory } from './types';
-import { api, supabase, transformIssue } from './services/api';
+import { api, transformIssue } from './services/api';
+import { supabase } from './services/supabaseClient';
 import { DesktopRow, MobileCard } from './components/IssueItem';
 
 const App: React.FC = () => {
