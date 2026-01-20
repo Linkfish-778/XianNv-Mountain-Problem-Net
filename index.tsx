@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { IssueItem, IssueCategory } from './types';
 import { api, transformIssue } from './services/api';
-import { supabase } from './services/supabaseClient';
+import { db } from './services/supabaseClient'; // 文件名未变，但内部已是 TCB
 import { DesktopRow, MobileCard } from './components/IssueItem';
 
 const App: React.FC = () => {
@@ -13,35 +13,55 @@ const App: React.FC = () => {
 
   useEffect(() => {
     setLoading(true);
-    api.getIssues().then(initialIssues => {
-      setIssues(initialIssues);
-      setLoading(false);
-    }).catch(e => {
-      console.error("加载失败", e);
-      setLoading(false);
+
+    // 腾讯云开发的实时数据监听器
+    const listener = db.collection('issues').watch({
+      onChange: (snapshot) => {
+        // 首次加载时，snapshot.type 为 'init'，包含所有初始数据
+        if (snapshot.type === 'init') {
+          setIssues(snapshot.docs.map(transformIssue));
+          setLoading(false);
+        } else {
+          // 后续的数据变更（增、删、改）
+          setIssues(prevIssues => {
+            let newIssues = [...prevIssues];
+
+            for (const change of snapshot.docChanges) {
+              if (change.dataType === 'add') {
+                // 如果是新增，且本地状态不存在，则添加
+                if (!newIssues.some(issue => issue.id === change.docId)) {
+                  newIssues.push(transformIssue(change.doc));
+                }
+              } else if (change.dataType === 'update') {
+                // 如果是更新，则替换本地状态
+                const index = newIssues.findIndex(issue => issue.id === change.docId);
+                if (index > -1) {
+                  newIssues[index] = transformIssue(change.doc);
+                }
+              } else if (change.dataType === 'remove') {
+                // 如果是删除，则从本地状态移除
+                newIssues = newIssues.filter(issue => issue.id !== change.docId);
+              }
+            }
+            return newIssues;
+          });
+        }
+      },
+      onError: (err) => {
+        console.error('实时数据监听失败', err);
+        setLoading(false);
+        alert('与服务器的实时连接已断开，请刷新页面重试。');
+      }
     });
 
-    const subscription = supabase
-      .channel('issues-channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setIssues(prev => prev.some(issue => issue.id === payload.new.id.toString()) ? prev : [...prev, transformIssue(payload.new)]);
-        } else if (payload.eventType === 'UPDATE') {
-          setIssues(prev => prev.map(issue => issue.id === payload.new.id.toString() ? transformIssue(payload.new) : issue));
-        } else if (payload.eventType === 'DELETE') {
-          setIssues(prev => prev.filter(issue => issue.id !== payload.old.id.toString()));
-        }
-      })
-      .subscribe();
-
+    // 组件卸载时，关闭监听器，防止内存泄漏
     return () => {
-      supabase.removeChannel(subscription);
+      listener.close();
     };
-  }, []);
+  }, []); // 空依赖数组确保此 effect 只在组件挂载时运行一次
 
-  // 更新逻辑
+  // 更新逻辑 (无需改变)
   const handleUpdate = useCallback(async (id: string, updates: Partial<IssueItem>) => {
-    // UI update is handled by the real-time subscription
     try {
       await api.updateIssue(id, updates);
     } catch (e) {
@@ -50,10 +70,9 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // 删除逻辑
+  // 删除逻辑 (无需改变)
   const handleDelete = useCallback(async (id: string) => {
     if (window.confirm('此操作将永久删除该记录，确定继续吗？')) {
-      // UI update is handled by the real-time subscription
       try {
         await api.deleteIssue(id);
       } catch (e) {
@@ -62,7 +81,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // 新增逻辑
+  // 新增逻辑 (无需改变)
   const handleAdd = useCallback(async (category: IssueCategory) => {
     const newItemData = { 
       category, 
@@ -73,7 +92,6 @@ const App: React.FC = () => {
     };
     
     try {
-      // The real-time subscription will handle the UI update
       await api.createIssue(newItemData);
     } catch (e) {
       console.error("新增失败", e);
@@ -96,7 +114,7 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-500 font-bold text-sm">初始化治理系统...</p>
+          <p className="text-slate-500 font-bold text-sm">正在连接云端数据库...</p>
         </div>
       </div>
     );
@@ -168,7 +186,6 @@ const App: React.FC = () => {
                 <table className="w-full text-left border-collapse table-fixed">
                   <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100">
                     <tr>
-                      {/* 移除了 ID 列 */}
                       <th className="px-8 py-5 w-1/3">问题核心描述</th>
                       <th className="px-4 py-5 w-1/4">影响分析</th>
                       <th className="px-4 py-5 text-center w-40">状态</th>
