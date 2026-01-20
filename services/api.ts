@@ -4,7 +4,7 @@ import { IssueItem } from '../types';
 // Supabase 返回的数据通常需要一些转换以匹配我们的前端类型
 type IssueFromSupabase = Omit<IssueItem, 'id'> & { id: number; created_at: string };
 
-const transformIssue = (issue: IssueFromSupabase): IssueItem => ({
+export const transformIssue = (issue: IssueFromSupabase): IssueItem => ({
     ...issue,
     id: issue.id.toString(), // 将 number 类型的 id 转换为 string
     lastUpdated: new Date(issue.created_at).toISOString().split('T')[0] // 简化日期格式
