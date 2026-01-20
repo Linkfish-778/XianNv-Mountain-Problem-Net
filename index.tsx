@@ -123,4 +123,100 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <
+      <nav className="sticky top-[108px] md:top-[73px] z-[90] bg-slate-50/95 backdrop-blur-md border-b border-slate-200 py-4 px-4 md:px-8">
+        <div className="max-w-7xl mx-auto flex gap-3 overflow-x-auto no-scrollbar">
+          <button 
+            onClick={() => setActiveTab('ALL')} 
+            className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all shrink-0 border-2 ${activeTab === 'ALL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-100'}`}
+          >
+            全部显示
+          </button>
+          {Object.values(IssueCategory).map(cat => (
+            <button 
+              key={cat} 
+              onClick={() => setActiveTab(cat)} 
+              className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all shrink-0 border-2 ${activeTab === cat ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-8 space-y-12">
+        {Object.values(IssueCategory).filter(cat => activeTab === 'ALL' || activeTab === cat).map(cat => {
+          const list = filtered.filter(i => i.category === cat);
+          if (activeTab === 'ALL' && list.length === 0 && cat !== IssueCategory.OTHERS) return null;
+          
+          return (
+            <section key={cat} className="bg-white rounded-[2rem] shadow-xl border border-slate-200/50 overflow-visible transition-shadow hover:shadow-2xl">
+              <div className="px-8 py-6 bg-white border-b border-slate-100 flex justify-between items-center sticky top-[180px] md:top-[145px] z-[80] rounded-t-[2rem]">
+                <div className="flex items-center gap-4">
+                  <div className={`w-4 h-4 rounded-full ${cat === IssueCategory.OTHERS ? 'bg-slate-400' : 'bg-blue-600'}`} />
+                  <h2 className="font-black text-slate-800 text-lg md:text-xl tracking-tight">{cat}</h2>
+                  <span className="px-3 py-1 bg-slate-100 text-slate-500 text-[10px] font-black rounded-full border border-slate-200">{list.length} 条记录</span>
+                </div>
+                <button 
+                  onClick={() => handleAdd(cat)} 
+                  className="bg-blue-600 text-white hover:bg-blue-700 px-6 py-2.5 rounded-xl text-xs font-black transition-all active:scale-95 shadow-lg shadow-blue-200"
+                >
+                  + 新增
+                </button>
+              </div>
+
+              <div className="hidden md:block">
+                <table className="w-full text-left border-collapse table-fixed">
+                  <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100">
+                    <tr>
+                      {/* 移除了 ID 列 */}
+                      <th className="px-8 py-5 w-1/3">问题核心描述</th>
+                      <th className="px-4 py-5 w-1/4">影响分析</th>
+                      <th className="px-4 py-5 text-center w-40">状态</th>
+                      <th className="px-4 py-5">进展/备注</th>
+                      <th className="px-8 py-5 text-right w-24">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {list.map(i => (
+                      <DesktopRow 
+                        key={i.id} 
+                        issue={i} 
+                        onUpdate={handleUpdate} 
+                        onDelete={handleDelete} 
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="md:hidden flex flex-col divide-y divide-slate-100">
+                {list.map(i => (
+                  <MobileCard 
+                    key={i.id} 
+                    issue={i} 
+                    onUpdate={handleUpdate} 
+                    onDelete={handleDelete} 
+                  />
+                ))}
+              </div>
+
+              {list.length === 0 && (
+                <div className="py-20 text-center text-slate-300 font-medium">
+                  该类别暂无异常记录
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </main>
+
+      <footer className="bg-slate-900 py-20 text-center mt-20">
+        <p className="text-[10px] text-slate-600 font-black uppercase tracking-[0.6em] mb-4">Wulong Fairy Mountain Governance System</p>
+        <p className="text-slate-400 text-xs tracking-widest">© 2026 数据已接入云端治理平台</p>
+      </footer>
+    </div>
+  );
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root')!);
+root.render(<App />);
