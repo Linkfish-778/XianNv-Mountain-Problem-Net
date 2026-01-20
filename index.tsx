@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { IssueItem, IssueCategory } from './types';
-import { IssueService } from './services/api';
+import { api, supabase, transformIssue } from './services/api';
 import { DesktopRow, MobileCard } from './components/IssueItem';
 
 const App: React.FC = () => {
@@ -11,77 +11,75 @@ const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // 初始化加载
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const data = await IssueService.getAll();
-      setIssues(data);
-    } catch (e) {
-      console.error("加载失败", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadData();
+    setLoading(true);
+    api.getIssues().then(initialIssues => {
+      setIssues(initialIssues);
+      setLoading(false);
+    }).catch(e => {
+      console.error("加载失败", e);
+      setLoading(false);
+    });
+
+    const subscription = supabase
+      .channel('issues-channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setIssues(prev => prev.some(issue => issue.id === payload.new.id.toString()) ? prev : [...prev, transformIssue(payload.new)]);
+        } else if (payload.eventType === 'UPDATE') {
+          setIssues(prev => prev.map(issue => issue.id === payload.new.id.toString() ? transformIssue(payload.new) : issue));
+        } else if (payload.eventType === 'DELETE') {
+          setIssues(prev => prev.filter(issue => issue.id !== payload.old.id.toString()));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
   }, []);
 
   // 更新逻辑
   const handleUpdate = useCallback(async (id: string, updates: Partial<IssueItem>) => {
-    const lastUpdated = new Date().toLocaleDateString('zh-CN', { 
-      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
-    });
-    const finalUpdates = { ...updates, lastUpdated };
-    
-    // 乐观更新 UI
-    setIssues(prev => prev.map(i => i.id === id ? { ...i, ...finalUpdates } : i));
-    
-    // 后台同步
+    // UI update is handled by the real-time subscription
     try {
-      await IssueService.update(id, finalUpdates);
+      await api.updateIssue(id, updates);
     } catch (e) {
       console.error("同步失败", e);
-      loadData(); // 失败则回滚
+      alert('更新失败，请稍后重试');
     }
   }, []);
 
   // 删除逻辑
   const handleDelete = useCallback(async (id: string) => {
     if (window.confirm('此操作将永久删除该记录，确定继续吗？')) {
-      setIssues(prev => prev.filter(i => i.id !== id));
+      // UI update is handled by the real-time subscription
       try {
-        await IssueService.delete(id);
+        await api.deleteIssue(id);
       } catch (e) {
         alert("删除失败，请检查网络");
-        loadData();
       }
     }
   }, []);
 
-  // 新增逻辑 - 确保追加到末尾
+  // 新增逻辑
   const handleAdd = useCallback(async (category: IssueCategory) => {
-    const nextId = (Math.max(0, ...issues.map(i => parseInt(i.id) || 0)) + 1).toString();
-    const newItem: IssueItem = { 
-      id: nextId, 
+    const newItemData = { 
       category, 
       description: '', 
       impact: '', 
       status: '待补充', 
-      remarks: '', 
-      lastUpdated: new Date().toLocaleDateString('zh-CN') 
+      remarks: '',
     };
-
-    setIssues(prev => [...prev, newItem]); // 追加到末尾
     
     try {
-      await IssueService.create(newItem);
+      // The real-time subscription will handle the UI update
+      await api.createIssue(newItemData);
     } catch (e) {
       console.error("新增失败", e);
-      loadData();
+      alert("创建新条目失败，请检查网络连接或稍后重试。");
     }
-  }, [issues]);
+  }, []);
 
   const filtered = useMemo(() => {
     const term = searchTerm.toLowerCase();
